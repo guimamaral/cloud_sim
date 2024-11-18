@@ -1,0 +1,95 @@
+# This input file tests the scheduler's behavior with:
+# 1. Sparse task arrivals to simulate underutilized periods.
+# 2. A mix of SLA0, SLA2, and SLA3 tasks to test prioritization.
+# 3. A variety of short and long runtimes to evaluate task placement efficiency.
+# 4. Machines with different power consumption profiles.
+
+# High-performance X86 machines
+machine class:
+{
+        Number of machines: 16
+        CPU type: X86
+        Number of cores: 8
+        Memory: 64000
+        S-States: [140, 120, 100, 80, 40, 20, 0]
+        P-States: [12, 8, 6, 4]
+        C-States: [12, 3, 1, 0]
+        MIPS: [1200, 1000, 800, 400]
+        GPUs: yes
+}
+
+# Low-power ARM machines
+machine class:
+{
+        Number of machines: 8
+        CPU type: ARM
+        Number of cores: 4
+        Memory: 16384
+        S-States: [80, 70, 60, 50, 40, 20, 0]
+        P-States: [8, 6, 4, 2]
+        C-States: [8, 2, 1, 0]
+        MIPS: [800, 600, 400, 200]
+        GPUs: no
+}
+
+# Minimal-resource RISCV machines
+machine class:
+{
+        Number of machines: 4
+        CPU type: RISCV
+        Number of cores: 2
+        Memory: 8192
+        S-States: [50, 40, 30, 20, 10, 5, 0]
+        P-States: [6, 4, 2, 1]
+        C-States: [6, 2, 1, 0]
+        MIPS: [400, 300, 200, 100]
+        GPUs: no
+}
+
+# SLA0 tasks with medium runtimes, arriving sparsely
+task class:
+{
+        Start time: 0
+        End time: 10000000
+        Inter arrival: 200000
+        Expected runtime: 5000000
+        Memory: 2048
+        VM type: LINUX
+        GPU enabled: no
+        SLA type: SLA0
+        CPU type: X86
+        Task type: STREAM
+        Seed: 520300
+}
+
+# SLA2 tasks with short runtimes, GPU-enabled
+task class:
+{
+        Start time: 0
+        End time: 10000000
+        Inter arrival: 500000
+        Expected runtime: 1000000
+        Memory: 1024
+        VM type: LINUX_RT
+        GPU enabled: yes
+        SLA type: SLA2
+        CPU type: X86
+        Task type: AI
+        Seed: 520301
+}
+
+# SLA3 tasks with long runtimes, sparse arrivals
+task class:
+{
+        Start time: 0
+        End time: 10000000
+        Inter arrival: 1000000
+        Expected runtime: 20000000
+        Memory: 512
+        VM type: LINUX
+        GPU enabled: no
+        SLA type: SLA3
+        CPU type: RISCV
+        Task type: WEB
+        Seed: 520302
+}
