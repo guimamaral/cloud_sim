@@ -1,0 +1,96 @@
+# This input file aims to test your scheduler's performance with intensive workloads across a variety
+# of architectures. The RISC-V machines are meant to handle less intensive workloads.
+
+
+# x86 workhorses
+machine class:
+{
+        Number of machines: 16
+        CPU type: X86
+        Number of cores: 16
+        Memory: 320000
+        S-States: [140, 120, 100, 80, 40, 20, 0]
+        P-States: [12, 8, 6, 4]
+        C-States: [12, 3, 1, 0]
+        MIPS: [1200, 100, 800, 600]
+        GPUs: yes
+}
+
+# ARM workhorses
+machine class:
+{
+        Number of machines: 16
+        CPU type: ARM
+        Number of cores: 16
+        Memory: 16384
+        S-States: [140, 120, 100, 80, 40, 20, 0]
+        P-States: [12, 8, 6, 4]
+        C-States: [12, 3, 1, 0]
+        MIPS: [1100, 900, 700, 500]
+        GPUs: yes
+}
+
+machine class:
+{
+        Number of machines: 8
+        CPU type: RISCV
+        Number of cores: 8
+        Memory: 16384
+        S-States: [100, 100, 100, 80, 60, 40, 0]
+        P-States: [12, 8, 6, 4]
+        C-States: [12, 3, 1, 0]
+        MIPS: [800, 600, 400, 300]
+        GPUs: no
+}
+
+# Intensive GPU task
+task class:
+{
+        Start time: 0
+        End time : 1000000
+        Inter arrival: 10000
+        Expected runtime: 10000000
+        Memory: 1024
+        VM type: LINUX
+        GPU enabled: yes
+        SLA type: SLA0
+        CPU type: X86
+        Task type: AI
+        Seed: 520230
+}
+
+# Intensive GPU task
+task class:
+{
+        Start time: 100000
+        End time : 2000000
+        Inter arrival: 5000
+        Expected runtime: 8000000
+        Memory: 1024
+        VM type: WIN
+        GPU enabled: yes
+        SLA type: SLA0
+        CPU type: ARM
+        Task type: CRYPTO
+        Seed: 520231
+}
+
+# Low-intensity web requests, ran for a long time
+task class:
+{
+        Start time: 0
+        End time : 7000000
+        Inter arrival: 10000
+        Expected runtime: 5000000
+        Memory: 1024
+        VM type: LINUX
+        GPU enabled: no
+        SLA type: SLA1
+        CPU type: RISCV
+        Task type: WEB
+        Seed: 520232
+}
+
+
+
+

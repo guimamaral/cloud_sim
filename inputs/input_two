@@ -1,0 +1,65 @@
+# This input file aims to test your scheduler's performance when dealing dealing with the following constraints:
+#   1. Every task has an extremely high memory footprint
+#   2. Every task has the most restrictive SLA requirement
+#   3. 1/2 tasks can benefit from a GPU
+
+machine class:
+{
+        Number of machines: 32
+        CPU type: X86
+        Number of cores: 16
+        Memory: 16384
+        S-States: [140, 120, 100, 80, 40, 20, 0]
+        P-States: [12, 8, 6, 4]
+        C-States: [12, 3, 1, 0]
+        MIPS: [1200, 1000, 800, 400]
+        GPUs: yes
+}
+
+
+machine class:
+{
+        Number of machines: 32
+        CPU type: ARM
+        Number of cores: 16
+        Memory: 320000
+        S-States: [140, 120, 100, 80, 40, 20, 0]
+        P-States: [12, 8, 6, 4]
+        C-States: [12, 3, 1, 0]
+        MIPS: [1000, 800, 600, 200]
+        GPUs: no
+}
+
+task class:
+{
+        Start time: 0
+        End time : 1000000
+        Inter arrival: 5000
+        Expected runtime: 10000000
+        Memory: 1024
+        VM type: LINUX
+        GPU enabled: yes
+        SLA type: SLA0
+        CPU type: X86
+        Task type: CRYPTO
+        Seed: 520230
+}
+
+task class:
+{
+        Start time: 10000
+        End time : 60000
+        Inter arrival: 5000
+        Expected runtime: 10000000
+        Memory: 1024
+        VM type: LINUX
+        GPU enabled: no
+        SLA type: SLA0
+        CPU type: ARM
+        Task type: STREAM
+        Seed: 520230
+}
+
+
+
+
