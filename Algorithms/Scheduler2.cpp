@@ -8,6 +8,7 @@
 
 #include "Scheduler.hpp"
 #include <algorithm>
+#include <limits>
 
 static bool migrating = false;
 static unsigned active_machines = 16;
@@ -35,15 +36,15 @@ void Scheduler::MigrationComplete(Time_t time, VMId_t vm_id) {
 }
 
 void Scheduler::NewTask(Time_t now, TaskId_t task_id) {
-    // P-Mapper Algorithm
-    
+    // P-Mapper algorithm
+
     bool task_gpu_capable = IsTaskGPUCapable(task_id);
     unsigned task_memory = GetTaskMemory(task_id);
     VMType_t task_vm_type = RequiredVMType(task_id);
     SLAType_t task_sla = RequiredSLA(task_id);
     CPUType_t task_cpu = RequiredCPUType(task_id);
 
-    // Sort Machines by Energy Consumption
+    // Sort machines by energy consumption
     std::sort(nachines.begin(), machines.end(), SortMachines);
 
     unsigned total_machines = Machine_GetTotal();
@@ -53,7 +54,9 @@ void Scheduler::NewTask(Time_t now, TaskId_t task_id) {
         if (task_cpu != machine_info.cpu) {
             continue;
         }
-        Machine_SetState(machine_id, S0);
+        if (machine_info.s_state != S0) {
+           Machine_SetState(machine_id, S0); 
+        }
         float machine_utilization = (float) machine_info.memory_used / machine_info.memory_size;
         float task_load_factor = (float) (task_memory + VM_MEMORY_OVERHEAD) / machine_info.memory_size;
         if (machine_utilization + task_load_factor < 1.0) {
@@ -65,16 +68,14 @@ void Scheduler::NewTask(Time_t now, TaskId_t task_id) {
         } 
     }
 
-    // Decide to attach the task to an existing VM,
-    //      vm.AddTask(taskid, Priority_T priority); or
-    // Create a new VM, attach the VM to a machine
-    //      VM vm(type of the VM)
-    //      vm.Attach(machine_id);
-    //      vm.AddTask(taskid, Priority_t priority) or
-    // Turn on a machine, create a new VM, attach it to the VM, then add the task
-    //
-    // Turn on a machine, migrate an existing VM from a loaded machine....
-    //
+    // Turn off unused machines 
+    for (MachineId_t machine_id : machines) {
+        MachineInfo_t machine_info = Machine_GetInfo(machine_id);
+        float machine_utilization = (float) machine_info.memory_used / machine_info.memory_size;
+        if (machine_info.s_state != S5 && machine_utilization == 0.0) {
+            Machine_SetState(machine_id, S5);
+        }
+    }
 }
 
 void Scheduler::PeriodicCheck(Time_t now) {
@@ -97,13 +98,45 @@ void Scheduler::Shutdown(Time_t time) {
 }
 
 void Scheduler::TaskComplete(Time_t now, TaskId_t task_id) {
-    // Do any bookkeeping necessary for the data structures
-    // Decide if a machine is to be turned off, slowed down, or VMs to be migrated according to your policy
-    // This is an opportunity to make any adjustments to optimize performance/energy
-
+    
     SimOutput("Scheduler::TaskComplete(): Task " + to_string(task_id) + " is complete at " + to_string(now), 4);
 }
 
+MachineId_t GetLeastUtilizedMachine() {
+    float min_utilization = 100.0; 
+    MachineId_t least_utilized_nachine;
+    for (MachineId_t machine_id : machines) {
+        MachineInfo_t machine_info = Machine_GetInfo(machine_id);
+        float machine_utilization = (float) machine_info.memory_used / machine_info.memory_size;
+        if (machine_utilization < min) {
+            least_utilized_machine = machine_id;
+        }
+    }
+    return least_utilized_machine;
+}
+
+VMId_t GetSmallestWorkload(MachineId_t machine_id) {
+    unsigned min_workload = UINT_MAX;
+    VMId_t smallest_workload;
+    for (VMId_t vm_id : vms) {
+        VMInfo_t vm_info = VM_GetInfo(vm_id);
+        unsigned vm_total_task_memory = GetTotalTaskMemoryForVM(vm_info);
+        if (vm_info.machine_id == machine_id && 
+            vm_total_task_memory < min_workload) {
+            smallest_workload = vm_id;
+        }
+    }
+    return smallest_workload;
+} 
+
+unsigned GetTotalTaskMemoryForVM(VMInfo_t vm) {
+    unsigned total = 0;
+    for (TaskId_t task_id : vm.active_tasks) {
+        TaskInfo_t task_info = GetTaskInfo(task_id);
+        total += task_info.required_memory;
+    }
+    return total;
+}  
 // Public interface below
 
 static Scheduler Scheduler;
