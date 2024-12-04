@@ -53,14 +53,21 @@ void Scheduler::NewTask(Time_t now, TaskId_t task_id) {
 
     unsigned total_machines = Machine_GetTotal();
     for (unsigned i = 0; i < total_machines; i++) {
+        //Getting machine info 
         MachineId_t machine_id = MachineId_t(i);
         MachineInfo_t machine_info = Machine_GetInfo(machine_id);
+
+        //If the cpu is not compatible keep looking
         if (task_cpu != machine_info.cpu) {
             continue;
         }
+        //make sure machine is awake
         Machine_SetState(machine_id, S0);
+
+        //calculate the things
         float machine_utilization = (float) machine_info.memory_used / machine_info.memory_size;
         float task_load_factor = (float) (task_memory + VM_MEMORY_OVERHEAD) / machine_info.memory_size;
+        
         if (machine_utilization + task_load_factor < 1.0) {
             VMId_t vm_id = VM_Create(task_vm_type, task_cpu);
             vms.push_back(vm_id);
@@ -92,11 +99,39 @@ void Scheduler::Shutdown(Time_t time) {
 }
 
 void Scheduler::TaskComplete(Time_t now, TaskId_t task_id) {
-    // Do any bookkeeping necessary for the data structures
-    // Decide if a machine is to be turned off, slowed down, or VMs to be migrated according to your policy
-    // This is an opportunity to make any adjustments to optimize performance/energy
+    VMId_t vm_id = (VMId_t)-1;
+    MachineId_t machine_id = (MachineId_t)-1;
+    for (auto it = vms.begin(); it != vms.end(); ++it) {
+        VMInfo_t vm_info = VM_GetInfo(*it);
+        if(!vm_info.active_tasks.empty() && vm_info.active_tasks[0] == task_id){
+            //found our vm
+            vm_id = *it;
+            machine_id = vm_info.machine_id;
+            vms.erase(it);
+            break;
+        }
+    }
+
+    // Check if task is found
+    if (vm_id == (VMId_t)-1 || machine_id == (MachineId_t)-1) {
+        return;
+    }
 
     SimOutput("Scheduler::TaskComplete(): Task " + to_string(task_id) + " is complete at " + to_string(now), 4);
+
+    VM_Shutdown(vm_id);
+    SimOutput("VM " + to_string(vm_id) + " shut down.", 4);
+
+
+    // Check if the machine is now idle
+    bool machine_idle = true;
+    for (const auto &vm : vms) {
+        VMInfo_t vm_info = VM_GetInfo(vm);
+        if (vm_info.machine_id == machine_id) {
+            machine_idle = false;
+            break;
+        }
+    }
 }
 
 // Public interface below
