@@ -44,7 +44,6 @@ void Scheduler::MigrationComplete(Time_t time, VMId_t vm_id) {
 
 void Scheduler::NewTask(Time_t now, TaskId_t task_id) {
     // Greedy Algorithm
-    
     bool task_gpu_capable = IsTaskGPUCapable(task_id);
     unsigned task_memory = GetTaskMemory(task_id);
     VMType_t task_vm_type = RequiredVMType(task_id);
@@ -66,10 +65,25 @@ void Scheduler::NewTask(Time_t now, TaskId_t task_id) {
             vms.push_back(vm_id);
             VM_Attach(vm_id, machine_id);
             VM_AddTask(vm_id, task_id, MID_PRIORITY);
-            return;
-        } 
+        } else {
+            // unsigned total_vms = vms.size();
+            // for (unsigned j = 0; j < total_vms; j++) {
+            //     VMId_t vm_id = VMId_t(j);
+            //     VMInfo_t vm_info = VM_GetInfo(vm_id);
+            // }
+        }
     }
-    // SLA VIOLATION! :(
+
+    // Decide to attach the task to an existing VM,
+    //      vm.AddTask(taskid, Priority_T priority); or
+    // Create a new VM, attach the VM to a machine
+    //      VM vm(type of the VM)
+    //      vm.Attach(machine_id);
+    //      vm.AddTask(taskid, Priority_t priority) or
+    // Turn on a machine, create a new VM, attach it to the VM, then add the task
+    //
+    // Turn on a machine, migrate an existing VM from a loaded machine....
+    //
 }
 
 void Scheduler::PeriodicCheck(Time_t now) {

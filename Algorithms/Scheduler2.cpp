@@ -4,6 +4,7 @@
 //
 //  Created by ELMOOTAZBELLAH ELNOZAHY on 10/20/24.
 //
+// P-MAPPER ALGORITHM
 
 #include "Scheduler.hpp"
 
@@ -25,16 +26,6 @@ void Scheduler::Init() {
     for(unsigned i = 0; i < total_machines; i++) {
         MachineId_t machine_id = MachineId_t(i);
         machines.push_back(machine_id);
-
-        // MachineInfo_t info = Machine_GetInfo(machine_id);
-        // MachineState_t s_state = info.s_state;
-        // if (s_state != S5) {
-        //     unsigned num_cpus = info.num_cpus;
-        //     unsigned mem_size = info.memory_size;
-        //     bool gpu = info.gpus;
-        //     CPUType_t cpu = info.cpu;
-        // }
-
     }
 }
 
@@ -43,8 +34,7 @@ void Scheduler::MigrationComplete(Time_t time, VMId_t vm_id) {
 }
 
 void Scheduler::NewTask(Time_t now, TaskId_t task_id) {
-    // Greedy Algorithm
-    
+    // P-Mapper Algorithm
     bool task_gpu_capable = IsTaskGPUCapable(task_id);
     unsigned task_memory = GetTaskMemory(task_id);
     VMType_t task_vm_type = RequiredVMType(task_id);
@@ -55,21 +45,19 @@ void Scheduler::NewTask(Time_t now, TaskId_t task_id) {
     for (unsigned i = 0; i < total_machines; i++) {
         MachineId_t machine_id = MachineId_t(i);
         MachineInfo_t machine_info = Machine_GetInfo(machine_id);
-        if (task_cpu != machine_info.cpu) {
-            continue;
-        }
-        Machine_SetState(machine_id, S0);
-        float machine_utilization = (float) machine_info.memory_used / machine_info.memory_size;
-        float task_load_factor = (float) (task_memory + VM_MEMORY_OVERHEAD) / machine_info.memory_size;
-        if (machine_utilization + task_load_factor < 1.0) {
-            VMId_t vm_id = VM_Create(task_vm_type, task_cpu);
-            vms.push_back(vm_id);
-            VM_Attach(vm_id, machine_id);
-            VM_AddTask(vm_id, task_id, MID_PRIORITY);
-            return;
-        } 
+
     }
-    // SLA VIOLATION! :(
+
+    // Decide to attach the task to an existing VM,
+    //      vm.AddTask(taskid, Priority_T priority); or
+    // Create a new VM, attach the VM to a machine
+    //      VM vm(type of the VM)
+    //      vm.Attach(machine_id);
+    //      vm.AddTask(taskid, Priority_t priority) or
+    // Turn on a machine, create a new VM, attach it to the VM, then add the task
+    //
+    // Turn on a machine, migrate an existing VM from a loaded machine....
+    //
 }
 
 void Scheduler::PeriodicCheck(Time_t now) {
@@ -128,6 +116,10 @@ void MigrationDone(Time_t time, VMId_t vm_id) {
     SimOutput("MigrationDone(): Migration of VM " + to_string(vm_id) + " was completed at time " + to_string(time), 4);
     Scheduler.MigrationComplete(time, vm_id);
     migrating = false;
+}
+
+void SortMachines() {
+
 }
 
 void SchedulerCheck(Time_t time) {
