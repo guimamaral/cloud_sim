@@ -7,6 +7,7 @@
 // P-MAPPER ALGORITHM
 
 #include "Scheduler.hpp"
+#include <algorithm>
 
 static bool migrating = false;
 static unsigned active_machines = 16;
@@ -35,17 +36,33 @@ void Scheduler::MigrationComplete(Time_t time, VMId_t vm_id) {
 
 void Scheduler::NewTask(Time_t now, TaskId_t task_id) {
     // P-Mapper Algorithm
+    
     bool task_gpu_capable = IsTaskGPUCapable(task_id);
     unsigned task_memory = GetTaskMemory(task_id);
     VMType_t task_vm_type = RequiredVMType(task_id);
     SLAType_t task_sla = RequiredSLA(task_id);
     CPUType_t task_cpu = RequiredCPUType(task_id);
 
+    // Sort Machines by Energy Consumption
+    std::sort(nachines.begin(), machines.end(), SortMachines);
+
     unsigned total_machines = Machine_GetTotal();
     for (unsigned i = 0; i < total_machines; i++) {
-        MachineId_t machine_id = MachineId_t(i);
+        MachineId_t machine_id = machines[i];
         MachineInfo_t machine_info = Machine_GetInfo(machine_id);
-
+        if (task_cpu != machine_info.cpu) {
+            continue;
+        }
+        Machine_SetState(machine_id, S0);
+        float machine_utilization = (float) machine_info.memory_used / machine_info.memory_size;
+        float task_load_factor = (float) (task_memory + VM_MEMORY_OVERHEAD) / machine_info.memory_size;
+        if (machine_utilization + task_load_factor < 1.0) {
+            VMId_t vm_id = VM_Create(task_vm_type, task_cpu);
+            vms.push_back(vm_id);
+            VM_Attach(vm_id, machine_id);
+            VM_AddTask(vm_id, task_id, MID_PRIORITY);
+            return;
+        } 
     }
 
     // Decide to attach the task to an existing VM,
@@ -118,8 +135,8 @@ void MigrationDone(Time_t time, VMId_t vm_id) {
     migrating = false;
 }
 
-void SortMachines() {
-
+void SortMachines(MachineId_t a, MachineId_t b) {
+    return Machine_GetEnergy(Machine_GetInfo(id)) < Machine_GetEnergy(Machine_GetInfo(id));
 }
 
 void SchedulerCheck(Time_t time) {
