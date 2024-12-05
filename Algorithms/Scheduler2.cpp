@@ -10,8 +10,13 @@
 #include <algorithm>
 #include <limits>
 
+static Scheduler s;
 static bool migrating = false;
 static unsigned active_machines = 16;
+
+bool SortMachines(MachineId_t a, MachineId_t b) {
+    return Machine_GetInfo(a).memory_size < Machine_GetInfo(b).memory_size;
+}
 
 void Scheduler::Init() {
     // Find the parameters of the clusters
@@ -29,6 +34,8 @@ void Scheduler::Init() {
         MachineId_t machine_id = MachineId_t(i);
         machines.push_back(machine_id);
     }
+    // Sort machines by energy consumption
+    std::sort(machines.begin(), machines.end(), SortMachines);
 }
 
 void Scheduler::MigrationComplete(Time_t time, VMId_t vm_id) {
@@ -44,9 +51,6 @@ void Scheduler::NewTask(Time_t now, TaskId_t task_id) {
     SLAType_t task_sla = RequiredSLA(task_id);
     CPUType_t task_cpu = RequiredCPUType(task_id);
 
-    // Sort machines by energy consumption
-    std::sort(nachines.begin(), machines.end(), SortMachines);
-
     unsigned total_machines = Machine_GetTotal();
     for (unsigned i = 0; i < total_machines; i++) {
         MachineId_t machine_id = machines[i];
@@ -55,7 +59,7 @@ void Scheduler::NewTask(Time_t now, TaskId_t task_id) {
             continue;
         }
         if (machine_info.s_state != S0) {
-           Machine_SetState(machine_id, S0); 
+           Machine_SetState(machine_id, S0);
         }
         float machine_utilization = (float) machine_info.memory_used / machine_info.memory_size;
         float task_load_factor = (float) (task_memory + VM_MEMORY_OVERHEAD) / machine_info.memory_size;
@@ -65,10 +69,10 @@ void Scheduler::NewTask(Time_t now, TaskId_t task_id) {
             VM_Attach(vm_id, machine_id);
             VM_AddTask(vm_id, task_id, MID_PRIORITY);
             return;
-        } 
+        }
     }
 
-    // Turn off unused machines 
+    // Turn off unused machines
     for (MachineId_t machine_id : machines) {
         MachineInfo_t machine_info = Machine_GetInfo(machine_id);
         float machine_utilization = (float) machine_info.memory_used / machine_info.memory_size;
@@ -97,37 +101,18 @@ void Scheduler::Shutdown(Time_t time) {
     SimOutput("SimulationComplete(): Time is " + to_string(time), 4);
 }
 
-void Scheduler::TaskComplete(Time_t now, TaskId_t task_id) {
-    
-    SimOutput("Scheduler::TaskComplete(): Task " + to_string(task_id) + " is complete at " + to_string(now), 4);
-}
-
-MachineId_t GetLeastUtilizedMachine() {
-    float min_utilization = 100.0; 
-    MachineId_t least_utilized_nachine;
-    for (MachineId_t machine_id : machines) {
+static MachineId_t GetLeastUtilizedMachine() {
+    float min_utilization = 100.0;
+    MachineId_t least_utilized_machine;
+    for (auto machine_id : s.machines) {
         MachineInfo_t machine_info = Machine_GetInfo(machine_id);
         float machine_utilization = (float) machine_info.memory_used / machine_info.memory_size;
-        if (machine_utilization < min) {
+        if (machine_utilization < min_utilization) {
             least_utilized_machine = machine_id;
         }
     }
     return least_utilized_machine;
 }
-
-VMId_t GetSmallestWorkload(MachineId_t machine_id) {
-    unsigned min_workload = UINT_MAX;
-    VMId_t smallest_workload;
-    for (VMId_t vm_id : vms) {
-        VMInfo_t vm_info = VM_GetInfo(vm_id);
-        unsigned vm_total_task_memory = GetTotalTaskMemoryForVM(vm_info);
-        if (vm_info.machine_id == machine_id && 
-            vm_total_task_memory < min_workload) {
-            smallest_workload = vm_id;
-        }
-    }
-    return smallest_workload;
-} 
 
 unsigned GetTotalTaskMemoryForVM(VMInfo_t vm) {
     unsigned total = 0;
@@ -136,24 +121,64 @@ unsigned GetTotalTaskMemoryForVM(VMInfo_t vm) {
         total += task_info.required_memory;
     }
     return total;
-}  
-// Public interface below
+}
 
-static Scheduler Scheduler;
+static VMId_t GetSmallestWorkload(MachineId_t machine_id) {
+    unsigned min_workload = 4294967295;
+    VMId_t smallest_workload = -1;
+    for (VMId_t vm_id : s.vms) {
+        cout << vm_id << endl;
+        VMInfo_t vm_info = VM_GetInfo(vm_id);
+        unsigned vm_total_task_memory = GetTotalTaskMemoryForVM(vm_info);
+        if (vm_info.machine_id == machine_id &&
+            vm_total_task_memory < min_workload) {
+            smallest_workload = vm_id;
+        }
+    }
+    return smallest_workload;
+}
+
+void Scheduler::TaskComplete(Time_t now, TaskId_t task_id) {
+    MachineId_t least_utilized_machine = GetLeastUtilizedMachine();
+    VMId_t smallest_workload_on_machine = GetSmallestWorkload(least_utilized_machine);
+    if (smallest_workload_on_machine == -1) {
+        return;
+    }
+    VMInfo_t vm_info = VM_GetInfo(smallest_workload_on_machine);
+    unsigned num_machines = Machine_GetTotal();
+    for (int i = num_machines - 1; i >= 0; i--) {
+        MachineId_t machine_id = machines[i];
+        MachineInfo_t machine_info = Machine_GetInfo(machine_id);
+        if (vm_info.cpu != machine_info.cpu) {
+            continue;
+        }
+        float machine_utilization = (float) machine_info.memory_used / machine_info.memory_size;
+        float task_load_factor = (float) (GetTotalTaskMemoryForVM(vm_info) + VM_MEMORY_OVERHEAD)
+            / machine_info.memory_size;
+        if (machine_utilization + task_load_factor < 1.0) {
+            if (machine_info.s_state == S0) {
+                VM_Migrate(smallest_workload_on_machine, machine_id);
+                return;
+            }
+        }
+    }
+    SimOutput("Scheduler::TaskComplete(): Task " + to_string(task_id) + " is complete at " + to_string(now), 4);
+}
+// Public interface below
 
 void InitScheduler() {
     SimOutput("InitScheduler(): Initializing scheduler", 4);
-    Scheduler.Init();
+    s.Init();
 }
 
 void HandleNewTask(Time_t time, TaskId_t task_id) {
     SimOutput("HandleNewTask(): Received new task " + to_string(task_id) + " at time " + to_string(time), 4);
-    Scheduler.NewTask(time, task_id);
+    s.NewTask(time, task_id);
 }
 
 void HandleTaskCompletion(Time_t time, TaskId_t task_id) {
     SimOutput("HandleTaskCompletion(): Task " + to_string(task_id) + " completed at time " + to_string(time), 4);
-    Scheduler.TaskComplete(time, task_id);
+    s.TaskComplete(time, task_id);
 }
 
 void MemoryWarning(Time_t time, MachineId_t machine_id) {
@@ -164,18 +189,14 @@ void MemoryWarning(Time_t time, MachineId_t machine_id) {
 void MigrationDone(Time_t time, VMId_t vm_id) {
     // The function is called on to alert you that migration is complete
     SimOutput("MigrationDone(): Migration of VM " + to_string(vm_id) + " was completed at time " + to_string(time), 4);
-    Scheduler.MigrationComplete(time, vm_id);
+    s.MigrationComplete(time, vm_id);
     migrating = false;
-}
-
-void SortMachines(MachineId_t a, MachineId_t b) {
-    return Machine_GetEnergy(Machine_GetInfo(id)) < Machine_GetEnergy(Machine_GetInfo(id));
 }
 
 void SchedulerCheck(Time_t time) {
     // This function is called periodically by the simulator, no specific event
     SimOutput("SchedulerCheck(): SchedulerCheck() called at " + to_string(time), 4);
-    Scheduler.PeriodicCheck(time);
+    s.PeriodicCheck(time);
     // static unsigned counts = 0;
     // counts++;
     // if(counts == 10) {
@@ -194,7 +215,7 @@ void SimulationComplete(Time_t time) {
     cout << "Simulation run finished in " << double(time)/1000000 << " seconds" << endl;
     SimOutput("SimulationComplete(): Simulation finished at time " + to_string(time), 4);
 
-    Scheduler.Shutdown(time);
+    s.Shutdown(time);
 }
 
 void SLAWarning(Time_t time, TaskId_t task_id) {
