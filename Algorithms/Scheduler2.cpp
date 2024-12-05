@@ -13,7 +13,16 @@
 static Scheduler s;
 static bool migrating = false;
 static unsigned active_machines = 16;
-
+unsigned GetMachineUtilization(MachineId_t machine_id) {
+    unsigned utilization = 0; 
+    for (VMId_t vm_id : Scheduler.vms) {
+        VMInfo_t vm_info = VM_GetInfo(vm_id);
+        if (vm_info.machine_id == machine_id) {
+            utilization += vm_info.active_tasks.size();
+        }
+    }
+    return utilization;
+}
 bool SortMachines(MachineId_t a, MachineId_t b) {
     return Machine_GetInfo(a).memory_size < Machine_GetInfo(b).memory_size;
 }
@@ -61,15 +70,17 @@ void Scheduler::NewTask(Time_t now, TaskId_t task_id) {
         if (machine_info.s_state != S0) {
            Machine_SetState(machine_id, S0);
         }
-        float machine_utilization = (float) machine_info.memory_used / machine_info.memory_size;
+        unsigned machine_utilization = GetMachineUtilization(machine_id);
+        float memory_utilization = (float) machine_info.memory_used / machine_info.memory_size;
         float task_load_factor = (float) (task_memory + VM_MEMORY_OVERHEAD) / machine_info.memory_size;
-        if (machine_utilization + task_load_factor < 1.0) {
+
+        if (machine_utilization + 1 < machine_info.num_cpus * 50 && memory_utilization + task_load_factor < 1.0) {
             VMId_t vm_id = VM_Create(task_vm_type, task_cpu);
             vms.push_back(vm_id);
             VM_Attach(vm_id, machine_id);
             VM_AddTask(vm_id, task_id, MID_PRIORITY);
             return;
-        }
+        } 
     }
 
     // Turn off unused machines
