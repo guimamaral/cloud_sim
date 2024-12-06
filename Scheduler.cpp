@@ -110,39 +110,39 @@ void Scheduler::Shutdown(Time_t time) {
 }
 
 void Scheduler::TaskComplete(Time_t now, TaskId_t task_id) {
-    // VMId_t vm_id = (VMId_t)-1;
-    // MachineId_t machine_id = (MachineId_t)-1;
-    // for (auto it = vms.begin(); it != vms.end(); ++it) {
-    //     VMInfo_t vm_info = VM_GetInfo(*it);
-    //     if(!vm_info.active_tasks.empty() && vm_info.active_tasks[0] == task_id){
-    //         //found our vm
-    //         vm_id = *it;
-    //         machine_id = vm_info.machine_id;
-    //         vms.erase(it);
-    //         break;
-    //     }
-    // }
+    VMId_t vm_id = (VMId_t)-1;
+    MachineId_t machine_id = (MachineId_t)-1;
+    for (auto it = vms.begin(); it != vms.end(); ++it) {
+        VMInfo_t vm_info = VM_GetInfo(*it);
+        if(!vm_info.active_tasks.empty() && vm_info.active_tasks[0] == task_id){
+            //found our vm
+            vm_id = *it;
+            machine_id = vm_info.machine_id;
+            vms.erase(it);
+            break;
+        }
+    }
 
-    // // Check if task is found
-    // if (vm_id == (VMId_t)-1 || machine_id == (MachineId_t)-1) {
-    //     return;
-    // }
+    // Check if task is found
+    if (vm_id == (VMId_t)-1 || machine_id == (MachineId_t)-1) {
+        return;
+    }
 
     SimOutput("Scheduler::TaskComplete(): Task " + to_string(task_id) + " is complete at " + to_string(now), 4);
 
-    //VM_Shutdown(vm_id);
-   // SimOutput("VM " + to_string(vm_id) + " shut down.", 4);
+    VM_Shutdown(vm_id);
+   SimOutput("VM " + to_string(vm_id) + " shut down.", 4);
 
 
-    // Check if the machine is now idle
-    // bool machine_idle = true;
-    // for (const auto &vm : vms) {
-    //     VMInfo_t vm_info = VM_GetInfo(vm);
-    //     if (vm_info.machine_id == machine_id) {
-    //         machine_idle = false;
-    //         break;
-    //     }
-    // }
+    //Check if the machine is now idle
+    bool machine_idle = true;
+    for (const auto &vm : vms) {
+        VMInfo_t vm_info = VM_GetInfo(vm);
+        if (vm_info.machine_id == machine_id) {
+            machine_idle = false;
+            break;
+        }
+    }
 }
 
 // Public interface below
