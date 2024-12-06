@@ -6,10 +6,68 @@
 //
 
 #include "Scheduler.hpp"
-
+static Scheduler Scheduler;
 static bool migrating = false;
 static unsigned active_machines = 16;
 
+VMId_t GetMinVMUtilization(MachineId_t machine_id) {
+    VMId_t ret = 0;
+    unsigned min = 4294967295;
+    for (auto vm_id : Scheduler.vms) {
+        if (VM_GetInfo(vm_id).active_tasks.size() < min && VM_GetInfo(vm_id).machine_id == machine_id) {
+            ret = vm_id;
+        }
+    }
+    return ret;
+}
+
+unsigned GetMachineUtilization(MachineId_t machine_id) {
+    unsigned utilization = 0;
+    for (VMId_t vm_id : Scheduler.vms) {
+        VMInfo_t vm_info = VM_GetInfo(vm_id);
+        if (vm_info.machine_id == machine_id) {
+            utilization += vm_info.active_tasks.size();
+        }
+    }
+    return utilization;
+}
+
+static MachineId_t GetLeastUtilizedMachine() {
+    float min_utilization = 100.0;
+    MachineId_t least_utilized_machine;
+    for (auto machine_id : s.machines) {
+        MachineInfo_t machine_info = Machine_GetInfo(machine_id);
+        float machine_utilization = (float) machine_info.memory_used / machine_info.memory_size;
+        if (machine_utilization < min_utilization) {
+            least_utilized_machine = machine_id;
+        }
+    }
+    return least_utilized_machine;
+}
+
+unsigned GetTotalTaskMemoryForVM(VMInfo_t vm) {
+    unsigned total = 0;
+    for (TaskId_t task_id : vm.active_tasks) {
+        TaskInfo_t task_info = GetTaskInfo(task_id);
+        total += task_info.required_memory;
+    }
+    return total;
+}
+
+static VMId_t GetSmallestWorkload(MachineId_t machine_id) {
+    unsigned min_workload = 4294967295;
+    VMId_t smallest_workload = -1;
+    for (VMId_t vm_id : s.vms) {
+        cout << vm_id << endl;
+        VMInfo_t vm_info = VM_GetInfo(vm_id);
+        unsigned vm_total_task_memory = GetTotalTaskMemoryForVM(vm_info);
+        if (vm_info.machine_id == machine_id &&
+            vm_total_task_memory < min_workload) {
+            smallest_workload = vm_id;
+        }
+    }
+    return smallest_workload;
+}
 void Scheduler::Init() {
     // Find the parameters of the clusters
     // Get the total number of machines
@@ -44,6 +102,7 @@ void Scheduler::MigrationComplete(Time_t time, VMId_t vm_id) {
 
 void Scheduler::NewTask(Time_t now, TaskId_t task_id) {
     // Greedy Algorithm
+
     bool task_gpu_capable = IsTaskGPUCapable(task_id);
     unsigned task_memory = GetTaskMemory(task_id);
     VMType_t task_vm_type = RequiredVMType(task_id);
@@ -52,38 +111,34 @@ void Scheduler::NewTask(Time_t now, TaskId_t task_id) {
 
     unsigned total_machines = Machine_GetTotal();
     for (unsigned i = 0; i < total_machines; i++) {
+        //Getting machine info
         MachineId_t machine_id = MachineId_t(i);
         MachineInfo_t machine_info = Machine_GetInfo(machine_id);
+
+        //If the cpu is not compatible keep looking
         if (task_cpu != machine_info.cpu) {
             continue;
         }
+        //make sure machine is awake
         Machine_SetState(machine_id, S0);
-        float machine_utilization = (float) machine_info.memory_used / machine_info.memory_size;
+
+        //calculate the things
+        unsigned machine_utilization = GetMachineUtilization(machine_id);
+        float memory_utilization = (float) machine_info.memory_used / machine_info.memory_size;
         float task_load_factor = (float) (task_memory + VM_MEMORY_OVERHEAD) / machine_info.memory_size;
-        if (machine_utilization + task_load_factor < 1.0) {
+
+        if (machine_utilization + 1 < machine_info.num_cpus && memory_utilization + task_load_factor < 1.0) {
             VMId_t vm_id = VM_Create(task_vm_type, task_cpu);
             vms.push_back(vm_id);
             VM_Attach(vm_id, machine_id);
             VM_AddTask(vm_id, task_id, MID_PRIORITY);
-        } else {
-            // unsigned total_vms = vms.size();
-            // for (unsigned j = 0; j < total_vms; j++) {
-            //     VMId_t vm_id = VMId_t(j);
-            //     VMInfo_t vm_info = VM_GetInfo(vm_id);
-            // }
+            return;
+        } else if (memory_utilization + task_load_factor < 1.0) {
+            VMId_t min_vm = GetMinVMUtilization(machine_id);
+            VM_AddTask(vm_id, task_id, HIGH_PRIORITY)
         }
     }
-
-    // Decide to attach the task to an existing VM,
-    //      vm.AddTask(taskid, Priority_T priority); or
-    // Create a new VM, attach the VM to a machine
-    //      VM vm(type of the VM)
-    //      vm.Attach(machine_id);
-    //      vm.AddTask(taskid, Priority_t priority) or
-    // Turn on a machine, create a new VM, attach it to the VM, then add the task
-    //
-    // Turn on a machine, migrate an existing VM from a loaded machine....
-    //
+    // SLA VIOLATION! :(
 }
 
 void Scheduler::PeriodicCheck(Time_t now) {
@@ -106,16 +161,34 @@ void Scheduler::Shutdown(Time_t time) {
 }
 
 void Scheduler::TaskComplete(Time_t now, TaskId_t task_id) {
-    // Do any bookkeeping necessary for the data structures
-    // Decide if a machine is to be turned off, slowed down, or VMs to be migrated according to your policy
-    // This is an opportunity to make any adjustments to optimize performance/energy
+    MachineId_t least_utilized_machine = GetLeastUtilizedMachine();
+    VMId_t smallest_workload_on_machine = GetSmallestWorkload(least_utilized_machine);
+    if (smallest_workload_on_machine == -1) {
+        return;
+    }
 
-    SimOutput("Scheduler::TaskComplete(): Task " + to_string(task_id) + " is complete at " + to_string(now), 4);
+    VMInfo_t vm_info = VM_GetInfo(smallest_workload_on_machine);
+    unsigned num_machines = Machine_GetTotal();
+    for (int i = num_machines - 1; i >= 0; i--) {
+        MachineId_t machine_id = machines[i];
+        MachineInfo_t machine_info = Machine_GetInfo(machine_id);
+        if (vm_info.cpu != machine_info.cpu || !machine_info.gpu_capable) {
+            continue;
+        }
+        // float machine_utilization = (float) machine_info.memory_used / machine_info.memory_size;
+        // float task_load_factor = (float) (GetTotalTaskMemoryForVM(vm_info) + VM_MEMORY_OVERHEAD)
+        //     / machine_info.memory_size;
+       // if (machine_utilization + task_load_factor < 1.0) {
+            if (machine_info.s_state == S0) {
+                VM_Migrate(smallest_workload_on_machine, machine_id);
+                return;
+            }
+        //}
+    }
 }
 
 // Public interface below
 
-static Scheduler Scheduler;
 
 void InitScheduler() {
     SimOutput("InitScheduler(): Initializing scheduler", 4);
