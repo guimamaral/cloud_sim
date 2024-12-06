@@ -22,6 +22,8 @@ public:
     void Shutdown(Time_t now);
     void TaskComplete(Time_t now, TaskId_t task_id);
     float CalculateUtilizationImbalance(MachineId_t simulated_machine, float simulated_utilization);
+    VMId_t GetSmallestVMOnMachine(MachineId_t machine_id);
+    MachineId_t FindBestMachineForVM(VMId_t vm_id);
     vector<VMId_t> vms;
     vector<MachineId_t> machines;
 };

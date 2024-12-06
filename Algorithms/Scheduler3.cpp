@@ -11,6 +11,7 @@
 #include <numeric>
 #include <cmath>
 
+static Scheduler Scheduler;
 static bool migrating = false;
 static unsigned active_machines = 16;
 
@@ -49,6 +50,37 @@ void Scheduler::MigrationComplete(Time_t time, VMId_t vm_id) {
 bool SortMachines(MachineId_t a, MachineId_t b) {
     return Machine_GetEnergy(a) < Machine_GetEnergy(b);
 }
+
+unsigned GetTotalTaskMemory(VMId_t vm_id) {
+    // Retrieve information about the specified VM
+    VMInfo_t vm_info = VM_GetInfo(vm_id);
+
+    // Initialize total memory
+    unsigned total_memory = 0;
+
+    // Iterate through all tasks in the VM
+    for (TaskId_t task_id : vm_info.active_tasks) {
+        // Retrieve task information
+        TaskInfo_t task_info = GetTaskInfo(task_id);
+
+        // Add the required memory for this task to the total
+        total_memory += task_info.required_memory;
+    }
+
+    return total_memory;
+}
+
+unsigned GetMachineUtilization(MachineId_t machine_id) {
+    unsigned utilization = 0; 
+    for (VMId_t vm_id : Scheduler.vms) {
+        VMInfo_t vm_info = VM_GetInfo(vm_id);
+        if (vm_info.machine_id == machine_id) {
+            utilization += vm_info.active_tasks.size();
+        }
+    }
+    return utilization;
+}
+
 
 void Scheduler::NewTask(Time_t now, TaskId_t task_id) {
     // Greedy Algorithm
@@ -107,7 +139,7 @@ void Scheduler::NewTask(Time_t now, TaskId_t task_id) {
         vms.push_back(vm_id); // Track active VMs
     } else {
         // Handle SLA violation
-        SimOutput("SLA violation: Unable to place task " + to_string(task_id), 0);
+        // SimOutput("SLA violation: Unable to place task " + to_string(task_id), 0);
     }    
     
 }
@@ -132,16 +164,64 @@ void Scheduler::Shutdown(Time_t time) {
 }
 
 void Scheduler::TaskComplete(Time_t now, TaskId_t task_id) {
-    // Do any bookkeeping necessary for the data structures
-    // Decide if a machine is to be turned off, slowed down, or VMs to be migrated according to your policy
-    // This is an opportunity to make any adjustments to optimize performance/energy
+    // VMId_t target_vm = (VMId_t)-1;
+    // MachineId_t machine_id = (MachineId_t)-1;
+
+    // // Find the VM hosting the completed task
+    // for (auto &vm_id : vms) {
+    //     VMInfo_t vm_info = VM_GetInfo(vm_id);
+    //     auto it = std::find(vm_info.active_tasks.begin(), vm_info.active_tasks.end(), task_id);
+    //     if (it != vm_info.active_tasks.end()) {
+    //         target_vm = vm_id;
+    //         machine_id = vm_info.machine_id;
+
+    //         // Remove the task from the VM's active tasks
+    //         vm_info.active_tasks.erase(it);
+    //         break;
+    //     }
+    // }
+
+    // if (target_vm == (VMId_t)-1 || machine_id == (MachineId_t)-1) {
+    //     // Task not found; no further action
+    //     SimOutput("TaskComplete(): Task not found in any VM.", 2);
+    //     return;
+    // }
+
+    // SimOutput("TaskComplete(): Task " + to_string(task_id) + " completed at time " + to_string(now), 4);
+
+    // // Check if the VM is empty and can be shut down
+    // VMInfo_t vm_info = VM_GetInfo(target_vm);
+    // if (vm_info.active_tasks.empty()) {
+    //     VM_Shutdown(target_vm);
+    //     vms.erase(std::remove(vms.begin(), vms.end(), target_vm), vms.end());
+    //     SimOutput("TaskComplete(): VM " + to_string(target_vm) + " shut down.", 4);
+    // }
+
+    // // Check if the machine is underutilized or idle
+    // unsigned machine_utilization = GetMachineUtilization(machine_id);
+    // if (machine_utilization == 0) {
+    //     // Machine is idle; turn it off
+    //     Machine_SetState(machine_id, S5);
+    //     SimOutput("TaskComplete(): Machine " + to_string(machine_id) + " turned off due to idleness.", 4);
+    // } else if (machine_utilization < 0.2) {
+    //     // Machine is underutilized; try to balance the workload
+    //     VMId_t smallest_vm = GetSmallestVMOnMachine(machine_id);
+    //     MachineId_t best_machine = FindBestMachineForVM(smallest_vm);
+
+    //     if (best_machine != (MachineId_t)-1 && best_machine != machine_id) {
+    //         // Migrate the VM to the best machine
+    //         VM_Migrate(smallest_vm, best_machine);
+    //         SimOutput("TaskComplete(): Migrated VM " + to_string(smallest_vm) + " from Machine " + to_string(machine_id) +
+    //                   " to Machine " + to_string(best_machine), 4);
+    //     }
+    // }
 
     SimOutput("Scheduler::TaskComplete(): Task " + to_string(task_id) + " is complete at " + to_string(now), 4);
 }
 
+
 // Public interface below
 
-static Scheduler Scheduler;
 
 float Scheduler::CalculateUtilizationImbalance(MachineId_t simulated_machine, float simulated_utilization) {
     std::vector<float> utilizations;
@@ -169,6 +249,48 @@ float Scheduler::CalculateUtilizationImbalance(MachineId_t simulated_machine, fl
 
     return std_dev;
 }
+
+// MachineId_t Scheduler::FindBestMachineForVM(VMId_t vm_id) {
+//     MachineId_t best_machine = (MachineId_t)-1;
+//     float min_utilization = std::numeric_limits<float>::max();
+
+//     VMInfo_t vm_info = VM_GetInfo(vm_id);
+//     unsigned vm_memory = GetTotalTaskMemory(vm_id);
+
+//     for (MachineId_t machine_id : machines) {
+//         if (machine_id == vm_info.machine_id) continue; // Skip current machine
+
+//         MachineInfo_t machine_info = Machine_GetInfo(machine_id);
+//         float current_utilization = (float)machine_info.memory_used / machine_info.memory_size;
+//         float new_utilization = current_utilization + ((float)vm_memory / machine_info.memory_size);
+
+//         if (new_utilization < 1.0 && new_utilization < min_utilization) {
+//             min_utilization = new_utilization;
+//             best_machine = machine_id;
+//         }
+//     }
+
+//     return best_machine;
+// }
+
+
+// VMId_t Scheduler::GetSmallestVMOnMachine(MachineId_t machine_id) {
+//     unsigned min_workload = std::numeric_limits<unsigned>::max();
+//     VMId_t smallest_vm = (VMId_t)-1;
+
+//     for (VMId_t vm_id : vms) {
+//         VMInfo_t vm_info = VM_GetInfo(vm_id);
+//         if (vm_info.machine_id == machine_id) {
+//             unsigned vm_memory = GetTotalTaskMemory(vm_id);
+//             if (vm_memory < min_workload) {
+//                 min_workload = vm_memory;
+//                 smallest_vm = vm_id;
+//             }
+//         }
+//     }
+//     return smallest_vm;
+// }
+
 
 
 void InitScheduler() {
@@ -231,3 +353,4 @@ void StateChangeComplete(Time_t time, MachineId_t machine_id) {
     // Called in response to an earlier request to change the state of a machine
 }
 
+//assisted by ChatGPT
