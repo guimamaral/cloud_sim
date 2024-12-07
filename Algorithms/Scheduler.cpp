@@ -35,21 +35,10 @@ void Scheduler::Init() {
     for(unsigned i = 0; i < total_machines; i++) {
         MachineId_t machine_id = MachineId_t(i);
         machines.push_back(machine_id);
-
-        // MachineInfo_t info = Machine_GetInfo(machine_id);
-        // MachineState_t s_state = info.s_state;
-        // if (s_state != S5) {
-        //     unsigned num_cpus = info.num_cpus;
-        //     unsigned mem_size = info.memory_size;
-        //     bool gpu = info.gpus;
-        //     CPUType_t cpu = info.cpu;
-        // }
-
     }
 }
 
 void Scheduler::MigrationComplete(Time_t time, VMId_t vm_id) {
-    // Update your data structure. The VM now can receive new tasks
 }
 
 void Scheduler::NewTask(Time_t now, TaskId_t task_id) {
@@ -91,10 +80,7 @@ void Scheduler::NewTask(Time_t now, TaskId_t task_id) {
 }
 
 void Scheduler::PeriodicCheck(Time_t now) {
-    // This method should be called from SchedulerCheck()
-    // SchedulerCheck is called periodically by the simulator to allow you to monitor, make decisions, adjustments, etc.
-    // Unlike the other invocations of the scheduler, this one doesn't report any specific event
-    // Recommendation: Take advantage of this function to do some monitoring and adjustments as necessary
+
 }
 
 void Scheduler::Shutdown(Time_t time) {

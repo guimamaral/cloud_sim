@@ -14,7 +14,7 @@ static Scheduler s;
 static bool migrating = false;
 static unsigned active_machines = 16;
 unsigned GetMachineUtilization(MachineId_t machine_id) {
-    unsigned utilization = 0; 
+    unsigned utilization = 0;
     for (VMId_t vm_id : Scheduler.vms) {
         VMInfo_t vm_info = VM_GetInfo(vm_id);
         if (vm_info.machine_id == machine_id) {
@@ -80,7 +80,7 @@ void Scheduler::NewTask(Time_t now, TaskId_t task_id) {
             VM_Attach(vm_id, machine_id);
             VM_AddTask(vm_id, task_id, MID_PRIORITY);
             return;
-        } 
+        }
     }
 
     // Turn off unused machines
@@ -94,10 +94,7 @@ void Scheduler::NewTask(Time_t now, TaskId_t task_id) {
 }
 
 void Scheduler::PeriodicCheck(Time_t now) {
-    // This method should be called from SchedulerCheck()
-    // SchedulerCheck is called periodically by the simulator to allow you to monitor, make decisions, adjustments, etc.
-    // Unlike the other invocations of the scheduler, this one doesn't report any specific event
-    // Recommendation: Take advantage of this function to do some monitoring and adjustments as necessary
+
 }
 
 void Scheduler::Shutdown(Time_t time) {
