@@ -15,7 +15,7 @@ static bool migrating = false;
 static unsigned active_machines = 16;
 unsigned GetMachineUtilization(MachineId_t machine_id) {
     unsigned utilization = 0;
-    for (VMId_t vm_id : Scheduler.vms) {
+    for (VMId_t vm_id : s.vms) {
         VMInfo_t vm_info = VM_GetInfo(vm_id);
         if (vm_info.machine_id == machine_id) {
             utilization += vm_info.active_tasks.size();
