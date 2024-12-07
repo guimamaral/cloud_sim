@@ -1,0 +1,6 @@
+Algorithm: Balanced Workload Allocation Algorithm
+Energy: 7.2688KW-Hour
+Runtime: 3603.48 seconds
+SLA0: 0%
+SLA1: 0%
+SLA: 0%

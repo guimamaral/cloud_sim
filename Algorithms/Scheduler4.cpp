@@ -3,7 +3,7 @@
 //  CloudSim
 //
 //  Created by ELMOOTAZBELLAH ELNOZAHY on 10/20/24.
-//
+// Min Utilization Algorithm
 
 #include "Scheduler.hpp"
 static Scheduler Scheduler;
@@ -35,7 +35,7 @@ unsigned GetMachineUtilization(MachineId_t machine_id) {
 static MachineId_t GetLeastUtilizedMachine() {
     float min_utilization = 100.0;
     MachineId_t least_utilized_machine;
-    for (auto machine_id : s.machines) {
+    for (auto machine_id : Scheduler.machines) {
         MachineInfo_t machine_info = Machine_GetInfo(machine_id);
         float machine_utilization = (float) machine_info.memory_used / machine_info.memory_size;
         if (machine_utilization < min_utilization) {
@@ -57,8 +57,7 @@ unsigned GetTotalTaskMemoryForVM(VMInfo_t vm) {
 static VMId_t GetSmallestWorkload(MachineId_t machine_id) {
     unsigned min_workload = 4294967295;
     VMId_t smallest_workload = -1;
-    for (VMId_t vm_id : s.vms) {
-        cout << vm_id << endl;
+    for (VMId_t vm_id : Scheduler.vms) {
         VMInfo_t vm_info = VM_GetInfo(vm_id);
         unsigned vm_total_task_memory = GetTotalTaskMemoryForVM(vm_info);
         if (vm_info.machine_id == machine_id &&
@@ -83,25 +82,14 @@ void Scheduler::Init() {
     for(unsigned i = 0; i < total_machines; i++) {
         MachineId_t machine_id = MachineId_t(i);
         machines.push_back(machine_id);
-
-        // MachineInfo_t info = Machine_GetInfo(machine_id);
-        // MachineState_t s_state = info.s_state;
-        // if (s_state != S5) {
-        //     unsigned num_cpus = info.num_cpus;
-        //     unsigned mem_size = info.memory_size;
-        //     bool gpu = info.gpus;
-        //     CPUType_t cpu = info.cpu;
-        // }
-
     }
 }
 
 void Scheduler::MigrationComplete(Time_t time, VMId_t vm_id) {
-    // Update your data structure. The VM now can receive new tasks
 }
 
 void Scheduler::NewTask(Time_t now, TaskId_t task_id) {
-    // Greedy Algorithm
+    // Min Utilization Algorithm
 
     bool task_gpu_capable = IsTaskGPUCapable(task_id);
     unsigned task_memory = GetTaskMemory(task_id);
@@ -135,17 +123,14 @@ void Scheduler::NewTask(Time_t now, TaskId_t task_id) {
             return;
         } else if (memory_utilization + task_load_factor < 1.0) {
             VMId_t min_vm = GetMinVMUtilization(machine_id);
-            VM_AddTask(vm_id, task_id, HIGH_PRIORITY)
+            VM_AddTask(min_vm, task_id, HIGH_PRIORITY);
         }
     }
     // SLA VIOLATION! :(
 }
 
 void Scheduler::PeriodicCheck(Time_t now) {
-    // This method should be called from SchedulerCheck()
-    // SchedulerCheck is called periodically by the simulator to allow you to monitor, make decisions, adjustments, etc.
-    // Unlike the other invocations of the scheduler, this one doesn't report any specific event
-    // Recommendation: Take advantage of this function to do some monitoring and adjustments as necessary
+
 }
 
 void Scheduler::Shutdown(Time_t time) {
@@ -172,18 +157,18 @@ void Scheduler::TaskComplete(Time_t now, TaskId_t task_id) {
     for (int i = num_machines - 1; i >= 0; i--) {
         MachineId_t machine_id = machines[i];
         MachineInfo_t machine_info = Machine_GetInfo(machine_id);
-        if (vm_info.cpu != machine_info.cpu || !machine_info.gpu_capable) {
+        if (vm_info.cpu != machine_info.cpu || !machine_info.gpus) {
             continue;
         }
-        // float machine_utilization = (float) machine_info.memory_used / machine_info.memory_size;
-        // float task_load_factor = (float) (GetTotalTaskMemoryForVM(vm_info) + VM_MEMORY_OVERHEAD)
-        //     / machine_info.memory_size;
-       // if (machine_utilization + task_load_factor < 1.0) {
+        float machine_utilization = (float) machine_info.memory_used / machine_info.memory_size;
+        float task_load_factor = (float) (GetTotalTaskMemoryForVM(vm_info) + VM_MEMORY_OVERHEAD)
+            / machine_info.memory_size;
+       if (machine_utilization + task_load_factor < 1.0) {
             if (machine_info.s_state == S0) {
                 VM_Migrate(smallest_workload_on_machine, machine_id);
                 return;
             }
-        //}
+        }
     }
 }
 
@@ -221,12 +206,6 @@ void SchedulerCheck(Time_t time) {
     // This function is called periodically by the simulator, no specific event
     SimOutput("SchedulerCheck(): SchedulerCheck() called at " + to_string(time), 4);
     Scheduler.PeriodicCheck(time);
-    // static unsigned counts = 0;
-    // counts++;
-    // if(counts == 10) {
-    //     migrating = true;
-    //     VM_Migrate(1, 9);
-    // }
 }
 
 void SimulationComplete(Time_t time) {
@@ -249,4 +228,3 @@ void SLAWarning(Time_t time, TaskId_t task_id) {
 void StateChangeComplete(Time_t time, MachineId_t machine_id) {
     // Called in response to an earlier request to change the state of a machine
 }
-
