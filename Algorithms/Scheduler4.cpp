@@ -154,6 +154,7 @@ void Scheduler::TaskComplete(Time_t now, TaskId_t task_id) {
 
     VMInfo_t vm_info = VM_GetInfo(smallest_workload_on_machine);
     unsigned num_machines = Machine_GetTotal();
+    float task_load_factor = (float) (GetTotalTaskMemoryForVM(vm_info) + VM_MEMORY_OVERHEAD);
     for (int i = num_machines - 1; i >= 0; i--) {
         MachineId_t machine_id = machines[i];
         MachineInfo_t machine_info = Machine_GetInfo(machine_id);
@@ -161,8 +162,7 @@ void Scheduler::TaskComplete(Time_t now, TaskId_t task_id) {
             continue;
         }
         float machine_utilization = (float) machine_info.memory_used / machine_info.memory_size;
-        float task_load_factor = (float) (GetTotalTaskMemoryForVM(vm_info) + VM_MEMORY_OVERHEAD)
-            / machine_info.memory_size;
+        task_load_factor /= machine_info.memory_size;
        if (machine_utilization + task_load_factor < 1.0) {
             if (machine_info.s_state == S0) {
                 VM_Migrate(smallest_workload_on_machine, machine_id);
