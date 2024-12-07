@@ -135,7 +135,6 @@ static VMId_t GetSmallestWorkload(MachineId_t machine_id) {
     unsigned min_workload = 4294967295;
     VMId_t smallest_workload = -1;
     for (VMId_t vm_id : s.vms) {
-        cout << vm_id << endl;
         VMInfo_t vm_info = VM_GetInfo(vm_id);
         unsigned vm_total_task_memory = GetTotalTaskMemoryForVM(vm_info);
         if (vm_info.machine_id == machine_id &&
